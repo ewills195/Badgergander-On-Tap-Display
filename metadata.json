@@ -1,0 +1,6 @@
+{
+  "name": "Badgergander Homebrewery",
+  "description": "Live Brewfather-connected on-tap display, fermentation telemetry curves, and brew schedule for Badgergander Homebrewery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
