@@ -259,7 +259,7 @@ export default function App() {
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
           {/* Zone 1: Single-line Brand */}
           <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
-            <BreweryLogo className="w-9 h-9 shrink-0" />
+            <BreweryLogo className="w-11 h-11 shrink-0" />
             <span className="text-lg font-extrabold tracking-tight text-white">
               {settings.breweryName}
             </span>
@@ -369,7 +369,7 @@ export default function App() {
         {/* Unconfigured First-Visit State */}
         {!hasCredentials && !data && !loading && (
           <section className="my-auto mx-auto max-w-xl w-full rounded-2xl border border-white/12 bg-slate-900/80 p-8 backdrop-blur-md text-center">
-            <BreweryLogo className="w-14 h-14 mx-auto mb-4" />
+            <BreweryLogo className="w-24 h-24 mx-auto mb-4" />
             <h1 className="text-2xl font-extrabold text-white tracking-tight text-balance">
               Connect Your Brewfather Brewery
             </h1>
