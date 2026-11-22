@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { BrewfatherReading, TempUnit } from '../types/brewfather';
 import {
   calcTargetAttenuationProgress,
@@ -25,7 +25,8 @@ export function FermentationChart({
 }: FermentationChartProps) {
   const [range, setRange] = useState<RangeKey>('all');
   const [showTemp, setShowTemp] = useState(true);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const isPointerScrubbing = useRef(false);
 
   const filtered = useMemo(() => {
     if (readings.length === 0) return [];
@@ -37,9 +38,9 @@ export function FermentationChart({
     return subset.length >= 2 ? subset : readings;
   }, [readings, range]);
 
-  const width = 640;
-  const height = compact ? 165 : 215;
-  const pad = { top: 14, right: 44, bottom: 26, left: 48 };
+  const width = 680;
+  const height = compact ? 225 : 250;
+  const pad = { top: 18, right: 54, bottom: 34, left: 62 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -67,8 +68,10 @@ export function FermentationChart({
       .map((r) => (r.temp != null ? convertTempValue(r.temp, tempUnit) : null))
       .filter((v): v is number => v != null && !Number.isNaN(v));
 
-    const tempMinRaw = tempValues.length > 0 ? Math.min(...tempValues) : tempUnit === 'F' ? 60 : 15;
-    const tempMaxRaw = tempValues.length > 0 ? Math.max(...tempValues) : tempUnit === 'F' ? 75 : 24;
+    const tempMinRaw =
+      tempValues.length > 0 ? Math.min(...tempValues) : tempUnit === 'F' ? 60 : 15;
+    const tempMaxRaw =
+      tempValues.length > 0 ? Math.max(...tempValues) : tempUnit === 'F' ? 75 : 24;
     const tempPad = Math.max(1.5, (tempMaxRaw - tempMinRaw) * 0.18);
     const tempMin = tempMinRaw - tempPad;
     const tempMax = tempMaxRaw + tempPad;
@@ -91,7 +94,9 @@ export function FermentationChart({
       }));
 
     const buildPath = (pts: Array<{ x: number; y: number }>) =>
-      pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+      pts
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+        .join(' ');
 
     const sgPath = buildPath(sgPoints);
     const sgAreaPath =
@@ -100,7 +105,6 @@ export function FermentationChart({
         : '';
     const tempPath = buildPath(tempPoints);
 
-    // 4 clean horizontal grid ticks for SG
     const sgTicks = [0, 0.33, 0.66, 1].map((f) => {
       const val = sgMax - f * sgSpan;
       return { val, y: pad.top + f * plotH };
@@ -111,7 +115,6 @@ export function FermentationChart({
       return { val, y: pad.top + f * plotH };
     });
 
-    // 4 x-axis date ticks
     const xTicks = [0, 0.33, 0.66, 1].map((f) => {
       const ts = minTime + f * timeSpan;
       return {
@@ -146,23 +149,23 @@ export function FermentationChart({
 
   if (!chartData || filtered.length < 2) {
     return (
-      <div className="flex items-center justify-center h-36 border-t border-white/8 text-xs text-slate-400 font-mono">
+      <div className="flex items-center justify-center h-40 border-t border-white/10 text-sm text-slate-400 font-mono">
         Waiting for Brewfather hydrometer readings…
       </div>
     );
   }
 
-  const hoveredReading =
-    hoverIdx != null && filtered[hoverIdx] ? filtered[hoverIdx] : null;
-  const hoveredX = hoveredReading ? chartData.xFor(hoveredReading.time) : null;
-  const hoveredAtten =
-    hoveredReading?.sg != null
-      ? calcTargetAttenuationProgress(og, hoveredReading.sg, estFg)
+  const activeReading =
+    selectedIdx != null && filtered[selectedIdx] ? filtered[selectedIdx] : null;
+  const activeX = activeReading ? chartData.xFor(activeReading.time) : null;
+  const activeAtten =
+    activeReading?.sg != null
+      ? calcTargetAttenuationProgress(og, activeReading.sg, estFg)
       : null;
 
-  const handlePointerMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const relX = ((e.clientX - rect.left) / rect.width) * width;
+  const updateIndexFromClientX = (clientX: number, svgEl: SVGSVGElement) => {
+    const rect = svgEl.getBoundingClientRect();
+    const relX = ((clientX - rect.left) / rect.width) * width;
     const clampedX = Math.max(pad.left, Math.min(width - pad.right, relX));
     const ratio = (clampedX - pad.left) / plotW;
     const targetTime = chartData.minTime + ratio * chartData.timeSpan;
@@ -176,45 +179,69 @@ export function FermentationChart({
         nearest = i;
       }
     }
-    setHoverIdx(nearest);
+    setSelectedIdx(nearest);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    isPointerScrubbing.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateIndexFromClientX(e.clientX, e.currentTarget);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === 'mouse' || isPointerScrubbing.current) {
+      updateIndexFromClientX(e.clientX, e.currentTarget);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    isPointerScrubbing.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
   };
 
   return (
-    <div className="flex flex-col gap-2 pt-2.5 border-t border-white/8">
-      {/* Chart toolbar */}
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-3 text-slate-400">
-          <span className="inline-flex items-center gap-1.5 font-medium text-sky-400">
-            <span className="w-2.5 h-0.5 bg-sky-400 inline-block" />
+    <div className="flex flex-col gap-3 pt-3.5 border-t border-white/10">
+      {/* Touch-sized Chart Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-slate-300">
+          <span className="inline-flex items-center gap-2 font-semibold text-sky-400">
+            <span className="w-3.5 h-1 rounded-full bg-sky-400 inline-block" />
             Gravity (SG)
           </span>
           <button
             type="button"
             onClick={() => setShowTemp((prev) => !prev)}
-            className={`inline-flex items-center gap-1.5 font-medium transition-opacity cursor-pointer whitespace-nowrap shrink-0 ${
-              showTemp ? 'text-amber-400 opacity-100' : 'text-slate-500 opacity-60 hover:opacity-90'
+            className={`min-h-[44px] px-3 rounded-lg inline-flex items-center gap-2 font-semibold border transition-all cursor-pointer whitespace-nowrap shrink-0 active:scale-95 ${
+              showTemp
+                ? 'text-amber-300 border-amber-400/35 bg-amber-950/35'
+                : 'text-slate-400 border-white/10 bg-slate-950/50 opacity-75 hover:opacity-100'
             }`}
-            title="Toggle temperature series"
+            title="Toggle temperature line"
           >
-            <span className="w-2.5 h-0.5 bg-amber-400 inline-block" />
+            <span className="w-3.5 h-1 rounded-full bg-amber-400 inline-block" />
             Temp (°{tempUnit})
           </button>
           {estFg != null && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-slate-400 font-mono">
-              <span className="w-2.5 border-t border-dashed border-emerald-400/70 inline-block" />
+            <span className="hidden sm:inline-flex items-center gap-2 text-slate-300 font-mono text-xs sm:text-sm">
+              <span className="w-3.5 border-t-2 border-dashed border-emerald-400/80 inline-block" />
               Target {estFg.toFixed(3)}
             </span>
           )}
         </div>
 
-        {/* Range switcher */}
-        <div className="flex items-center gap-0.5 bg-slate-950/70 p-0.5 rounded-md border border-white/10">
+        {/* Touch Range Switcher (>=44px height) */}
+        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-white/12">
           {(['all', '7d', '48h'] as RangeKey[]).map((key) => (
             <button
               key={key}
               type="button"
-              onClick={() => setRange(key)}
-              className={`px-2 py-0.5 text-[11px] font-mono rounded transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              onClick={() => {
+                setRange(key);
+                setSelectedIdx(null);
+              }}
+              className={`min-h-[40px] min-w-[48px] px-3 text-xs sm:text-sm font-mono font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 range === key
                   ? 'bg-slate-800 text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -226,20 +253,25 @@ export function FermentationChart({
         </div>
       </div>
 
-      {/* SVG Canvas */}
+      {/* SVG Canvas with Pointer/Touch Scrubbing */}
       <div className="relative w-full">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto overflow-visible select-none"
-          onMouseMove={handlePointerMove}
-          onMouseLeave={() => setHoverIdx(null)}
+          className="w-full h-auto overflow-visible select-none touch-none cursor-crosshair"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onMouseLeave={() => {
+            if (!isPointerScrubbing.current) setSelectedIdx(null);
+          }}
           role="img"
-          aria-label="Fermentation specific gravity and temperature curve"
+          aria-label="Fermentation specific gravity and temperature curve. Drag to inspect readings."
         >
           <defs>
             <linearGradient id="sgAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.26" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.01" />
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.02" />
             </linearGradient>
           </defs>
 
@@ -251,14 +283,14 @@ export function FermentationChart({
                 x2={width - pad.right}
                 y1={tick.y}
                 y2={tick.y}
-                stroke="rgba(255,255,255,0.06)"
+                stroke="rgba(255,255,255,0.08)"
                 strokeWidth="1"
               />
               <text
-                x={pad.left - 6}
-                y={tick.y + 3.5}
+                x={pad.left - 8}
+                y={tick.y + 4.5}
                 textAnchor="end"
-                className="fill-sky-400/90 text-[10px] font-mono"
+                className="fill-sky-300 text-[13px] font-mono font-semibold"
               >
                 {tick.val.toFixed(3)}
               </text>
@@ -270,10 +302,10 @@ export function FermentationChart({
             chartData.tempTicks.map((tick, i) => (
               <text
                 key={i}
-                x={width - pad.right + 6}
-                y={tick.y + 3.5}
+                x={width - pad.right + 8}
+                y={tick.y + 4.5}
                 textAnchor="start"
-                className="fill-amber-400/90 text-[10px] font-mono"
+                className="fill-amber-300 text-[13px] font-mono font-semibold"
               >
                 {tick.val.toFixed(0)}°
               </text>
@@ -284,9 +316,11 @@ export function FermentationChart({
             <text
               key={i}
               x={tick.x}
-              y={height - 6}
-              textAnchor={i === 0 ? 'start' : i === chartData.xTicks.length - 1 ? 'end' : 'middle'}
-              className="fill-slate-400 text-[10px] font-mono"
+              y={height - 8}
+              textAnchor={
+                i === 0 ? 'start' : i === chartData.xTicks.length - 1 ? 'end' : 'middle'
+              }
+              className="fill-slate-300 text-[13px] font-mono font-medium"
             >
               {tick.label}
             </text>
@@ -301,13 +335,13 @@ export function FermentationChart({
                 x2={width - pad.right}
                 y1={chartData.estFgY}
                 y2={chartData.estFgY}
-                stroke="rgba(52, 211, 153, 0.55)"
-                strokeDasharray="4 4"
-                strokeWidth="1.25"
+                stroke="rgba(52, 211, 153, 0.7)"
+                strokeDasharray="6 5"
+                strokeWidth="1.75"
               />
             )}
 
-          {/* SG area & line */}
+          {/* SG area & thicker line for distance legibility */}
           {chartData.sgAreaPath && (
             <path d={chartData.sgAreaPath} fill="url(#sgAreaGrad)" />
           )}
@@ -316,7 +350,7 @@ export function FermentationChart({
               d={chartData.sgPath}
               fill="none"
               stroke="#38bdf8"
-              strokeWidth="2.2"
+              strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -328,75 +362,82 @@ export function FermentationChart({
               d={chartData.tempPath}
               fill="none"
               stroke="#fb923c"
-              strokeWidth="1.8"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeOpacity="0.9"
+              strokeOpacity="0.92"
             />
           )}
 
-          {/* Interactive hover crosshair */}
-          {hoveredReading && hoveredX != null && (
+          {/* Interactive scrub crosshair */}
+          {activeReading && activeX != null && (
             <g>
               <line
-                x1={hoveredX}
-                x2={hoveredX}
+                x1={activeX}
+                x2={activeX}
                 y1={pad.top}
                 y2={pad.top + plotH}
-                stroke="rgba(255,255,255,0.28)"
-                strokeWidth="1"
+                stroke="rgba(255,255,255,0.4)"
+                strokeWidth="1.5"
               />
-              {hoveredReading.sg != null && (
+              {activeReading.sg != null && (
                 <circle
-                  cx={hoveredX}
-                  cy={chartData.ySgFor(hoveredReading.sg)}
-                  r="4"
+                  cx={activeX}
+                  cy={chartData.ySgFor(activeReading.sg)}
+                  r="5.5"
                   fill="#38bdf8"
                   stroke="#090d16"
-                  strokeWidth="1.5"
+                  strokeWidth="2"
                 />
               )}
-              {showTemp && hoveredReading.temp != null && (
+              {showTemp && activeReading.temp != null && (
                 <circle
-                  cx={hoveredX}
-                  cy={chartData.yTempFor(convertTempValue(hoveredReading.temp, tempUnit))}
-                  r="3.5"
+                  cx={activeX}
+                  cy={chartData.yTempFor(convertTempValue(activeReading.temp, tempUnit))}
+                  r="5"
                   fill="#fb923c"
                   stroke="#090d16"
-                  strokeWidth="1.5"
+                  strokeWidth="2"
                 />
               )}
             </g>
           )}
         </svg>
 
-        {/* Live hover readout strip */}
-        {hoveredReading && (
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-slate-950/90 border border-white/10 text-[11px] font-mono text-slate-300">
-            <span className="text-slate-400">
-              {new Date(hoveredReading.time).toLocaleString(undefined, {
+        {/* Live scrub readout strip */}
+        {activeReading && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-slate-950/92 border border-white/15 text-xs sm:text-sm font-mono text-slate-200">
+            <span className="text-slate-300">
+              {new Date(activeReading.time).toLocaleString(undefined, {
                 month: 'short',
                 day: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
               })}
             </span>
-            <div className="flex items-center gap-3">
-              {hoveredReading.sg != null && (
-                <span className="text-sky-400">
-                  SG {hoveredReading.sg.toFixed(3)}
+            <div className="flex flex-wrap items-center gap-4">
+              {activeReading.sg != null && (
+                <span className="text-sky-300 font-bold">
+                  SG {activeReading.sg.toFixed(3)}
                 </span>
               )}
-              {hoveredReading.temp != null && (
-                <span className="text-amber-400">
-                  {formatTemp(hoveredReading.temp, tempUnit)}
+              {activeReading.temp != null && (
+                <span className="text-amber-300 font-bold">
+                  {formatTemp(activeReading.temp, tempUnit)}
                 </span>
               )}
-              {hoveredAtten != null && (
-                <span className="text-emerald-400">
-                  {hoveredAtten.toFixed(0)}% Atten.
+              {activeAtten != null && (
+                <span className="text-emerald-300 font-bold">
+                  {activeAtten.toFixed(0)}% Atten.
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => setSelectedIdx(null)}
+                className="min-h-[32px] px-2.5 rounded-md bg-white/10 hover:bg-white/15 text-xs text-slate-200 font-sans font-semibold cursor-pointer"
+              >
+                Clear
+              </button>
             </div>
           </div>
         )}

@@ -64,97 +64,102 @@ export function TapCard({
 
   return (
     <article
+      role="button"
+      tabIndex={0}
       onClick={() => onSelectBatch(batch)}
-      className={`group relative flex flex-col justify-between rounded-xl border p-5 transition-colors duration-200 cursor-pointer backdrop-blur-md ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectBatch(batch);
+        }
+      }}
+      className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 transition-all duration-150 cursor-pointer backdrop-blur-md select-none active:scale-[0.985] focus-visible:outline-2 focus-visible:outline-rose-400 ${
         isOnDeck
-          ? 'bg-slate-950/55 border-white/8 opacity-85 hover:opacity-100 hover:border-white/20'
-          : 'bg-slate-900/70 border-white/12 hover:border-rose-400/40'
+          ? 'bg-slate-950/60 border-white/10 opacity-85 hover:opacity-100 hover:border-white/20'
+          : 'bg-slate-900/78 border-white/14 hover:border-rose-400/50'
       }`}
     >
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h3 className="text-lg font-bold text-white tracking-tight truncate group-hover:text-rose-200 transition-colors">
-            {name}
-          </h3>
-          <p className="mt-0.5 text-xs text-slate-400 truncate">
-            <span className={isOnDeck ? 'text-slate-300 font-medium' : 'text-rose-300 font-medium'}>
-              {style}
-            </span>
-            {batch.batchNo != null && (
-              <>
-                <span aria-hidden="true" className="mx-1.5 text-slate-600">
-                  ·
-                </span>
-                <span className="font-mono">Batch #{batch.batchNo}</span>
-              </>
-            )}
-            {batch.status === 'Conditioning' && (
-              <>
-                <span aria-hidden="true" className="mx-1.5 text-slate-600">
-                  ·
-                </span>
-                <span className="text-sky-300">Conditioning</span>
-              </>
-            )}
-          </p>
-        </div>
-
+      {/* Top Action & Batch Row */}
+      <div className="flex items-center justify-between gap-3 mb-4">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onCycleAssignment(batch._id);
           }}
-          title="Click to cycle tap assignment"
-          className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 border ${
+          title="Tap to cycle tap slot"
+          className={`min-h-[44px] px-4 rounded-xl text-sm font-bold tracking-tight transition-all cursor-pointer whitespace-nowrap shrink-0 border active:scale-95 ${
             isAssignedTap
-              ? 'bg-rose-600 text-white border-rose-400/50 hover:bg-rose-500'
+              ? 'bg-rose-600 text-white border-rose-400/60 hover:bg-rose-500'
               : isOnDeck
-              ? 'bg-slate-800 text-slate-200 border-slate-600/60 hover:bg-slate-700'
-              : 'bg-slate-900/80 text-slate-400 border-white/10 hover:text-white hover:border-white/25'
+              ? 'bg-slate-800 text-slate-200 border-slate-600/70 hover:bg-slate-700'
+              : 'bg-slate-900/90 text-slate-300 border-white/15 hover:text-white hover:border-white/30'
           }`}
         >
           {tapLabel}
         </button>
+
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 font-mono whitespace-nowrap">
+          {batch.status === 'Conditioning' && (
+            <>
+              <span className="text-sky-300 font-sans font-semibold">Conditioning</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+            </>
+          )}
+          {batch.batchNo != null && <span>Batch #{batch.batchNo}</span>}
+        </div>
       </div>
 
-      {/* Hairline metric strip (no nested sub-cards) */}
-      <div className="grid grid-cols-3 divide-x divide-white/10 border-y border-white/10 py-3 my-1">
-        <div className="pr-3">
-          <div className="text-[11px] font-medium text-slate-400">ABV</div>
-          <div className="mt-0.5 text-lg font-bold text-white font-mono">
+      {/* Hero Beer Identity (SRM Glass + Distance-Readable Name & Style) */}
+      <div className="flex items-center gap-4 mb-5">
+        <BeerGlassIcon srm={srm} className="w-10 h-14 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-2xl sm:text-[1.7rem] font-extrabold text-white tracking-tight leading-[1.15] line-clamp-2 group-hover:text-rose-100 transition-colors">
+            {name}
+          </h3>
+          <p
+            className={`mt-1 text-sm sm:text-base font-semibold truncate ${
+              isOnDeck ? 'text-slate-300' : 'text-rose-300'
+            }`}
+          >
+            {style}
+          </p>
+        </div>
+      </div>
+
+      {/* Centered Instrument Metric Strip — readable from 3-4 feet */}
+      <div className="grid grid-cols-3 divide-x divide-white/12 border-y border-white/12 py-3.5 text-center">
+        <div className="px-2">
+          <div className="text-xs sm:text-[13px] font-semibold text-slate-400">ABV</div>
+          <div className="mt-1 text-2xl sm:text-3xl font-extrabold text-white font-mono leading-none">
             {abv != null ? `${abv.toFixed(1)}%` : '—'}
           </div>
         </div>
-        <div className="px-3">
-          <div className="text-[11px] font-medium text-slate-400">IBU</div>
-          <div className="mt-0.5 text-lg font-bold text-white font-mono">
+        <div className="px-2">
+          <div className="text-xs sm:text-[13px] font-semibold text-slate-400">IBU</div>
+          <div className="mt-1 text-2xl sm:text-3xl font-extrabold text-white font-mono leading-none">
             {ibu != null ? Math.round(ibu) : '—'}
           </div>
         </div>
-        <div className="pl-3 flex items-center justify-between gap-2">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400">SRM</div>
-            <div className="mt-0.5 text-lg font-bold text-white font-mono">
-              {srm != null ? srm.toFixed(1) : '—'}
-            </div>
+        <div className="px-2">
+          <div className="text-xs sm:text-[13px] font-semibold text-slate-400">SRM</div>
+          <div className="mt-1 text-2xl sm:text-3xl font-extrabold text-white font-mono leading-none">
+            {srm != null ? srm.toFixed(1) : '—'}
           </div>
-          <BeerGlassIcon srm={srm} className="w-6 h-8 shrink-0" />
         </div>
       </div>
 
-      {/* Tasting note preview or footer line */}
-      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
-        <span className="truncate">
+      {/* Tasting Notes / Touch Disclosure Footer */}
+      <div className="mt-3.5 flex items-end justify-between gap-3 text-sm text-slate-300">
+        <p className="line-clamp-2 leading-snug text-slate-300">
           {batch.tastingNotes
             ? batch.tastingNotes
             : packagedDate
             ? `Packaged ${formatShortDate(packagedDate)}`
-            : 'Taproom pour'}
-        </span>
-        <span className="font-mono text-[11px] text-slate-500 whitespace-nowrap shrink-0 group-hover:text-slate-300 transition-colors">
-          Details →
+            : 'Tap for recipe details'}
+        </p>
+        <span className="font-mono text-xs text-slate-400 whitespace-nowrap shrink-0 group-hover:text-white transition-colors">
+          Recipe →
         </span>
       </div>
     </article>

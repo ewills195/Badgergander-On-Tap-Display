@@ -9,7 +9,7 @@ const KEYS = {
 
 export const DEFAULT_SETTINGS: TaproomSettings = {
   breweryName: 'Badgergander Homebrewery',
-  tapLabels: ['Left Tap', 'Right Tap', 'On Deck'],
+  tapLabels: ['Left Tap', 'Right Tap'],
   tempUnit: 'F',
   layoutMode: 'auto',
   refreshMinutes: 15,
